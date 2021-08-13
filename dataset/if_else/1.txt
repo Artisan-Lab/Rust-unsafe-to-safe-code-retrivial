@@ -3,6 +3,10 @@ fn main() {
 
     if number < 5 {
         println!("condition was true");
+        if number < 0{
+            println!("number < 0");
+        }
+
     } else {
         println!("condition was false");
     }
