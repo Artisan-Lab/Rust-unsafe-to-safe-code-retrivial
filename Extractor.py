@@ -11,20 +11,26 @@ class Node (object):
         self.index = index#每个node的唯一编号。编号顺序按深度优先
         self.Range = Range#该代码块在原字符串中坐标范围
         self.data = data
-        self.title = None#每个代码块的左括号前，上一条语句之后的语句
+        self.title = None#代码块的(左括号前&上一条语句之后的)语句
         self.label = []#用于存储该代码块的控制语句，由于嵌套可能存在，故将label定义为数组.其值为[(index,condition),...]
         self.layer =layer#相对于程序入口，该代码块的嵌套层数
         self.findScope = None  # 代码块中寻找标签的源代码中的范围
-        self.next = None
+        self.kind = (self.layer,self.title) #kind标记了这个node的属性，是一个元组(层数，类型）如(0,fn)(1,if)(1,else)
+        self.next = []
+        self.pre = []#Node中节点上下连接Node的index存放在next和pre数组中
+
+    def getKindCondition(self):
+        return self.kind[1]
 
     def show(self):
-        print("layer of the code blocks is \n\t{}".format(self.layer))
-        print("index of the code block is \n\t{}".format(self.index))
-        print("findScope of the code block is {}".format(self.findScope))
-        print("title of the code block is \n\t{}".format(self.title))
-        print("Range of source code is \n\t{}".format(self.Range))
-        print("data of the code block is \n\t{}".format(self.data))
-        print("label of the code blocks is \n\t{}".format(self.label))
+        print("--layer:\t\t{}".format(self.layer))
+        print("--index:\t\t{}".format(self.index))
+        print("--findScope:\t{}".format(self.findScope))
+        print("--title:\t\t{}".format(self.title))
+        print("--kind:\t\t{}".format(self.kind))
+        print("--Range:\t\t{}".format(self.Range))
+        print("--data:\t\t{}".format(self.data))
+        print("--label:\t\t{}".format(self.label))
 #用于管理一份代码的所有codeBlock（即node）
 class codeBlockList(object):
     def __init__(self):
@@ -33,27 +39,39 @@ class codeBlockList(object):
 
     def append(self,node):
         self.nodelist.append(node)
+        self.getLength()
 
     def getLength(self):
         self.length = len(self.nodelist)
         return self.length
 
+    def getNodeByIndex(self,i):
+        if i<0 or i>= self.length:
+            print("ERROR:index out of range")
+            return None
+        else:
+            return self.nodelist[i]
+
     def calFindScope(self, content):
-        #确定各个节点的label计算范围，并赋值title
+        #确定各个节点的label计算范围，并赋值title以及kind
         #range index of content
         start = 0
-
+        showFlag = False#控制是否输出中间工程
         end = len(content)-1
         #遍历nodelist，确定各个节点寻找关键字的范围。被遍历的nodelist应是被sortByBraceOrder排序过的
-        for i in range(len(self.nodelist)):
+        for i in range(len(self.nodelist)):#i是node的index
+            #这里默认输入代码块是一个函数，或者最外层是被一对大括号包括起来的代码块
             #关键字范围对应该代码块左括号之前的第一条语句
-            print("--------findScope of node %d------------" % i)
+            if showFlag:
+                print("--------findScope of node %d------------" % i)
             if i == 0:
                 r = self.nodelist[i].Range
                 self.nodelist[i].findScope = (start,r[0])#寻找范围不包括本代码块的括号
-                # print("findScope is \n\t{}".format(self.nodelist[i].findScope))
-                # print("the string of findScope in sorce code is \n\t{}".format(content[start:r[0]]))
+                if showFlag:
+                    print("findScope is \n\t{}".format(self.nodelist[i].findScope))
+                    print("the string of findScope in sorce code is \n\t{}".format(content[start:r[0]]))
                 self.nodelist[i].title = content[start:r[0]]
+                self.changeKind(i)#title赋值完，给kind赋值
                 start = r[0]#下次搜索的起始寻找范围不包括本代码块的括号
             else:
                 r = self.nodelist[i].Range
@@ -65,13 +83,35 @@ class codeBlockList(object):
                     if content[j] == ';' or content[j] == '{' or content[j] == '}':
                         start = j+1
                         break
-                # self.nodelist[i].findScope = (start,r[0])
-                # print("findScope is \n\t{}".format(self.nodelist[i].findScope))
-                # print("the string of findScope in sorce code is \n\t{}".format(content[start:r[0]]))
+                self.nodelist[i].findScope = (start,r[0])
+                if showFlag:
+                    print("findScope is \n\t{}".format(self.nodelist[i].findScope))
+                    print("the string of findScope in sorce code is \n\t{}".format(content[start:r[0]]))
                 self.nodelist[i].title = content[start:r[0]]
+                self.changeKind(i)  # title赋值完，给kind赋值
                 start = r[0]
 
             pass
+        return
+
+    def changeKind(self,index):
+        #通过title为改节点的kind赋值
+        #---------------todo 以后可能在这里创建关键字列表（字典）------------------
+        temp = self.nodelist[index].title
+        layer = self.nodelist[index].layer#kind = (layer,string)
+
+        #todo 未考虑判读语句中带有字符串的情形，如if str == "if else else if"
+        dic = ["if","else","else if","fn"]
+        for string in dic:
+            pos = -1
+            pos = temp.find(string)
+            if pos>=0:
+                self.nodelist[index].kind = (layer,string)
+                break
+            else:
+                continue
+
+
         return
 
     def changeLabel(self,tempnode):
@@ -82,7 +122,7 @@ class codeBlockList(object):
         for j in range(len(self.nodelist)):
             print("-----------codeBlock%d---------------" % j)
             self.nodelist[j].show()
-            print("---------------------------")
+            print("------------------------------------")
     #各代码块顺序按在文件中的顺序排列,并改变index
     def sortByBraceOrder(self):
         self.nodelist.sort(key=self.takeNodeBrace)
@@ -185,8 +225,35 @@ class LabeStack(object):
         self.length = 0
         self.top = -1
         self.stack = []
+        self.nodelistIsEmpty = False#标记进栈队列是否为空，若元素全部进栈，该字段为true
+
+    def isEmpty(self)->bool:
+        if self.top == -1:
+            return True
+        elif self.top > -1:
+            return False
+        else:
+            print("ERROR: 栈底指针异常，top<-1")
+            return False
+
+    def getTopItem(self):
+        if self.top>-1:
+            return self.stack[self.top]
+        else:
+            print("ERROR: the stack is empty")
+            return False
+
+    def getItem(self,index):
+        """get item by index"""
+        if index>-1:
+            return self.stack[index]
+        else:
+            print("ERROR: the stack is empty")
+            return False
 
     def push(self,node):
+        #进栈时若栈内空间不够，则调用append函数
+        #若空间足够，则将下一空间节点置为node
         if len(self.stack)<=self.length:
             self.stack.append(node)
             self.length+=1
@@ -197,9 +264,10 @@ class LabeStack(object):
             self.top+=1
 
     def pop(self):
+        #出栈时改变cbList中label值
         tempnode = self.stack[self.top]
         templabel = []
-
+        #出栈时生成label，label等于栈内升序title组成的数组
         for i in range(self.top+1):
             temp = (self.stack[i].index,self.stack[i].title)
             templabel.append(temp)
@@ -209,17 +277,170 @@ class LabeStack(object):
         self.top-=1
         self.length-=1
 
+        #tempIndex = tempnode.index
+        print("------in pop()-----------")
+        tempnode.show()
+
         return tempnode
 
-    def check(self):
+    def check(self,listIsEmpty)->list:
+        #进栈之后根据匹配规则生成出栈序列poplist，主要检测情况1,3
         #todo
-        return
+        poplist = []
+        #检测顺序应该是先检测往下一层，再检测网上一层，最后检测同层，即
+        #若进站前检测，则无区别
+        # 1.检测往下一层<=>self.layerDeltaCheck() == 1
+        # 2.检测往上一层<=>self.layerDeltaCheck() < -1
+        # 3.检测同层<=>self.layerDeltaCheck() == 0
+        if not listIsEmpty:
+            #进栈队列不为空，即进栈尚未完成
+            if self.layerDeltaCheck() == 1:
+                #1.进入下层嵌套中，pass,直接进栈，不pop，即poplist为空
+                poplist = []
+            elif self.layerDeltaCheck() <= -1:
+                #2.检测往上一层或上n层，直接出栈元素至层数与top元素层数相等即可
+                topItem = self.getTopItem()
+                topLayer = topItem.layer
+                index = self.top - 1
+                start = -1
+                while index > -1:
+                    preNode = self.getItem(index)
+                    if topLayer == preNode.layer :
+                        start = index
+                        break
+                    else:
+                        continue
+                if start > -1:
+                    poplist.append(self.top - start)
+                else:
+                    print("ERROR: can not find equal layer ")
 
-    def popall(self,node):
+            elif self.layerDeltaCheck() == 0:
+                #3.同层代码块，检测是否出栈
+                topItem = self.getTopItem()
+
+                if topItem.getKindCondition() == "else":
+                    #else 的情况往前找到同层 if ，依序pop
+                    topLayer = topItem.layer
+                    index = self.top - 1
+                    start = -1
+                    # else 的情况往前找到同层 if ，poplist放入要pop节点的数量，从后往前pop
+                    while index>-1 :
+                        preNode = self.getItem(index)
+                        if topLayer == preNode.layer and preNode.getKindCondition() == "if":
+                            start = index
+                            break
+                        else:
+                            continue
+                    if start > -1:
+                        poplist.append(self.top - start)
+                    else:
+                        print("ERROR: can not find 'if' ")
+                else:
+                    #除去else的情况，else if直接进栈即可
+                    poplist = []
+            else:
+                print("ERROR11: 出现了layerDelta大于1的异常情况")
+
+
+        else:#进栈完毕
+            if self.top == 0:
+                #只剩最后一个元素
+                poplist.append(1)
+            else:
+                print("ERROR12: 进栈完毕后，栈内不止一个元素")
+
+        return poplist
+
+    def checkBefore(self,tempnode)->list:
+        #执行进栈前检测，返回poplist
+        #进栈前检测，主要检测情况2.检测往上一层<=>self.layerDeltaCheck() < -1
         #todo
-        return
+        poplist = []
+
+        print("---in checkBefore----------")
+        print("layerDelta is {}".format(self.layerDeltaCheckTop(tempnode)))
+
+        if self.layerDeltaCheckTop(tempnode) == 1:
+            # 1.进入下层嵌套中，pass,直接进栈，不pop，即poplist为空
+            poplist = []
+        elif self.layerDeltaCheckTop(tempnode) <= -1:
+            # 2.检测往上一层或上n层，直接出栈元素至层数与tempnode层数相等即可
+            tempLayer = tempnode.layer
+            index = self.top - 1
+            start = -1
+            while index > -1:
+                preNode = self.getItem(index)
+                if tempLayer == preNode.layer:
+                    start = index
+                    break
+                else:
+                    continue
+            if start > -1:
+                poplist.append(self.top - start)
+            else:
+                print("ERROR: can not find equal layer ")
+
+        # elif self.layerDeltaCheckTop(tempnode) == 0:
+        #     # 3.同层代码块，检测是否出栈
+        #     topItem = self.getTopItem()
+        #
+        #     if topItem.getKindCondition() == "else":
+        #         # else 的情况往前找到同层 if ，依序pop
+        #         tempLayer = tempnode.layer
+        #         index = self.top - 1
+        #         start = -1
+        #         # else 的情况往前找到同层 if ，poplist放入要pop节点的数量，从后往前pop
+        #         while index > -1:
+        #             preNode = self.getItem(index)
+        #             if topLayer == preNode.layer and preNode.getKindCondition() == "if":
+        #                 start = index
+        #                 break
+        #             else:
+        #                 continue
+        #         if start > -1:
+        #             poplist.append(self.top - start)
+        #         else:
+        #             print("ERROR: can not find 'if' ")
+        #     else:
+        #         # 除去else的情况，else if直接进栈即可
+        #         poplist = []
+        else:
+            print("ERROR21: 出现了layerDelta大于1的异常情况")
+
+        return poplist
 
 
+    def layerDeltaCheck(self):
+        """check top node & pre node"""
+        if self.top>0:
+            #返回当前和上一层layer之间的差值
+            return self.getTopItem().layer-self.getItem(self.top-1).layer
+        else:
+            print("ERROR: the stack is empty or just one item")
+            return False
+
+    def layerDeltaCheckTop(self,tempnode):
+        """check top node & temp node"""
+        if self.top>=0:
+            #返回当前tempnode和topnode layer之间的差值
+            return tempnode.layer-self.getTopItem().layer
+        else:
+            print("ERROR: the stack is empty")
+            return False
+
+
+    def popall(self,poplist):
+        #根据poplist进行出栈
+        #todo
+        result = []
+        if len(poplist) == 0:
+            return result
+        else:
+            for i in poplist:
+                result.append(self.pop())
+
+        return result
 
 
 
@@ -265,6 +486,7 @@ def find(string,subString)->list:
     :param subString:
     :return:
     """
+    #string.find()函数如果未找到则返回-1
     search = subString
     start = 0
     result = []
@@ -427,20 +649,21 @@ def codeBlockExtractor(content:str):
 #-------------3从代码和codeBlockList中提取出CFG---------
 def cfgExtractor(content:str):
     print("-----------cfgExtractor---------------")
-    cbList = codeBlockExtractor(content)
+    cbList = codeBlockExtractor(content)#cbList存放了所有的codeBlock节点node
     # p_if = find(content,"if")
     # p_else = find(content,"else")
     # print(p_if)
     # print(p_else)
-    cbList.sortByBraceOrder()
+    cbList.sortByBraceOrder()#代码node按照在源程序中的顺序进行排序，并改变索引
     # cbList.sort(key=takeNodeBrace)
     # for j in range(len(cbList)):
     #     print("-----------codeBlock%d---------------" % j)
     #     cbList[j].show()
     #     print("---------------------------")
 
-
     cbList.calFindScope(content)#确定每个node的title，以便于生成label
+    #-----------生成title后cb.show--------------
+    print("-----------生成tiele后cb.show--------------")
     cbList.show()
 
     # labelList = LabelLinklist()#创建空表
@@ -464,13 +687,75 @@ def cfgExtractor(content:str):
     # #     pass
     # for index in range(cbList.getLength()):
 
-    ls = LabeStack(cbList)
-    for i in range(cbList.getLength()):
-        #todo
-        ls.push(cbList.nodelist[i])
-        list = ls.check()
-        ls.popall(list)
-        pass
+    ls = LabeStack(cbList)#用cnList初始化label栈
+    #循环应该使用while栈非空，所以需要初始化栈push第一个元素
+
+    # for i in range(cbList.getLength()):
+    #     #理论上进栈完成则label生成完成
+    #     #其具体步骤为
+    #     #1.进栈push
+    #     #2.check，确定出栈序列
+    #     #3.popall，按照出栈序列进行出栈并生成label
+    #     #4.重复123直到进栈完毕；且最后一次进栈push、check、popall之后栈stack应该为空，不为空报错
+    #     #todo
+    #     ls.push(cbList.nodelist[i])
+    #     poplist = ls.check()
+    #     ls.popall(poplist)
+    #     pass
+    i = 0#while 循环用指针
+    if cbList.getLength()<=0:
+        print("ERROR: nodeList长度小于等于0")
+    else:
+        #初始化label栈，push第一个元素
+        ls.push(cbList.getNodeByIndex(i))
+        i = i+1
+        max = cbList.getLength()
+    #--------------生成label的主循环-------------------------
+        #进行label生成，进栈前检测是否出栈or进栈
+        while not ls.isEmpty():
+            print("while 执行了第%d遍" % i)
+            time.sleep(1)
+            if i < max:
+                #进栈队列未进栈完成
+                nodeListIsempty = False
+                tempnode = cbList.getNodeByIndex(i)
+
+                #print("tempnode is \n")
+                #tempnode.show()
+
+
+
+                #todo 进栈前检测
+                poplist = ls.checkBefore(tempnode)
+                print("进栈前poplist is {}".format(poplist))
+                ls.popall(poplist)
+
+
+                ls.push(tempnode)
+
+
+                poplist = ls.check(nodeListIsempty)
+                ls.popall(poplist)
+
+                print("poplist is {}".format(poplist))
+            else:
+                #进栈队列进栈完成
+                nodeListIsempty = True
+                poplist = ls.check(nodeListIsempty)
+                ls.popall(poplist)
+
+                print("poplist is {}".format(poplist))
+            i+=1
+            if i > 5:
+                break
+
+
+        # -----------生成label后cb.show--------------
+        print("-----------生成label后cb.show--------------")
+        cbList.show()
+
+
+
 
 
 
