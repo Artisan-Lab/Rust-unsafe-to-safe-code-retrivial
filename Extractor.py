@@ -20,7 +20,29 @@ class Node (object):
         self.pre = []#Node中节点上下连接Node的index存放在next和pre数组中
 
     def getKindCondition(self):
+        #得到kind中第二个元素
         return self.kind[1]
+    def getKindLayer(self):
+        #得到kind中第1个元素
+        return self.kind[0]
+
+    def getIthLabel(self,i):
+        """得到该node的label中第i个元素中的第二个元素，即label字符串"""
+        str = ""
+        if i<0 or i>len(self.label):
+            print("ERROR:i<0 or i>len(self.label)")
+        else:
+            str = self.label[i][1]
+        return str
+
+    def getIthLabelIndex(self,i):
+        """得到该node的label中第i个元素中的第1个元素，即该label对应节点的index"""
+        str = None
+        if i<0 or i>len(self.label):
+            print("ERROR:i<0 or i>len(self.label)")
+        else:
+            str = self.label[i][0]
+        return str
 
     def show(self):
         print("--layer:\t\t{}".format(self.layer))
@@ -115,7 +137,111 @@ class codeBlockList(object):
         return
 
     def changeLabel(self,tempnode):
+        """将tempnode中对应label写入cbList中对应label中"""
         self.nodelist[tempnode.index].label = tempnode.label
+        return
+
+    def labelTransform(self):
+        """将自身中节点得到的label进行整理，并且可以由label得到cfg"""
+        print("-----------in labelTransform--------------")
+        lnodeList = self.getLength()
+        #todo
+        for i in range(lnodeList):
+            lLabel = len(self.nodelist[i].label)
+            tempNode = self.nodelist[i]
+            #else块最后一个标签必为else
+            if tempNode.title == "else":
+                #tempLayer = tempNode.layer
+                start = -1#找出同层if,由于label数组中只存了节点index，无layer信息，故找不到同层if；则逆序找到相邻最近if即可
+                for j in range(lLabel-1,-1,-1):
+                    id = tempNode.label[j][0]
+                    print("id is %d"% id)
+                    print("self.nodelist[id].getKindCondition is\n{}".format(self.nodelist[id].getKindCondition()))
+                    if self.nodelist[id].getKindCondition() == "if":
+                        start = j
+                        break
+                    else:
+                        continue
+                if start == -1:
+                    print("ERROR:there is no label 'if' in the label list")
+                #将标签组合，并生成新的label数组
+                newLabel = []
+                lastLabel = tempNode.label[lLabel-1]#取最后一个节点，即else节点
+                print("start is %d" % start)
+                #遇到templabel之前的label照搬，遇到同层if之后开始合并
+                for k in range(lLabel-1):#不包含最后一个else节点
+                    print("k is %d" % k)
+                    if k<start:
+                        newLabel.append(tempNode.label[k])
+                        print("k label is {}".format(tempNode.label[k]))
+
+                    if k>=start:
+                        string = lastLabel[1]#取最后一个label的字符串部分
+                        index = tempNode.label[k][0]
+                        index = str(index)
+                        condition = tempNode.label[k][1]
+                        string = string+"-Index:"+index+",Condition:"+condition
+                        lastLabel = (lastLabel[0],string)
+
+                newLabel.append(lastLabel)
+                self.nodelist[i].label = newLabel
+
+            else:
+                #不为else的节点无需处理
+                pass
+
+            pass
+        return
+
+    def clearTitleString(self):
+        """用于清除条件语句中的空格、回车符等无效字符"""
+
+        #todo 暂未考虑判断条件中有字符串的情况
+        l = self.getLength()
+        # todo
+        for i in range(l):
+            t = self.nodelist[i].title
+            if t == None:
+                print("ERROR: title is None")
+                continue
+            else:
+                #去掉回车与\t
+                t = t.replace("\n","")
+                t = t.replace("\t","")
+                t = t.replace("\r", "")
+                #t = t.replace(" ", "")
+                #去除空格
+                start = -1
+                flag1 = False#如果前方一直是空格，到i处不为空格，则flag1=True，start = i-1
+                end = -1
+                flag2 = False
+                l = len(t)
+                for j in range(l):
+                    if flag1:
+                        start = j - 1
+                        break
+                    if t[j] == " ":
+                        flag1 = False
+                    else:
+                        flag1 = True
+                #逆序循环，range（起始，终止，-1表示逆序）左闭右开
+                for k in range(l-1,-1,-1):
+                    if flag2:
+                        end = k + 1
+                        break
+                    if t[k] == " ":
+                        flag2 = False
+                    else:
+                        flag2 = True
+                if start > -1 and end > -1:
+                    t = t[start:end+1]#切片左闭右开，所以end+1
+                else:
+                    print("ERROR: in clearTitleString")
+                self.nodelist[i].title = t
+                print("title of node %d is :" % i)
+                print("---{}---".format(self.nodelist[i].title))
+
+
         return
 
     def show(self):
@@ -286,6 +412,7 @@ class LabeStack(object):
     def check(self,listIsEmpty)->list:
         #进栈之后根据匹配规则生成出栈序列poplist，主要检测情况1,3
         #todo
+        print("----------in check function------------")
         poplist = []
         #检测顺序应该是先检测往下一层，再检测网上一层，最后检测同层，即
         #若进站前检测，则无区别
@@ -323,7 +450,7 @@ class LabeStack(object):
                     #else 的情况往前找到同层 if ，依序pop
                     topLayer = topItem.layer
                     index = self.top - 1
-                    start = -1
+                    start = -1#start标记if位置
                     # else 的情况往前找到同层 if ，poplist放入要pop节点的数量，从后往前pop
                     while index>-1 :
                         preNode = self.getItem(index)
@@ -333,7 +460,8 @@ class LabeStack(object):
                         else:
                             continue
                     if start > -1:
-                        poplist.append(self.top - start)
+                        #-----check得到poplist应该包含if处位置-------
+                        poplist.append(self.top - start+1)
                     else:
                         print("ERROR: can not find 'if' ")
                 else:
@@ -358,7 +486,7 @@ class LabeStack(object):
         #todo
         poplist = []
 
-        print("---in checkBefore----------")
+        print("---in checkBefore-----")
         print("layerDelta is {}".format(self.layerDeltaCheckTop(tempnode)))
 
         if self.layerDeltaCheckTop(tempnode) == 1:
@@ -377,6 +505,7 @@ class LabeStack(object):
                 else:
                     continue
             if start > -1:
+                #此处检测到返回上层，值pop当前层的元素，不包含上层元素
                 poplist.append(self.top - start)
             else:
                 print("ERROR: can not find equal layer ")
@@ -437,7 +566,10 @@ class LabeStack(object):
         if len(poplist) == 0:
             return result
         else:
-            for i in poplist:
+            num = poplist[0]
+            for i in range(num):
+                print("------in popall---------")
+                print("执行第{}遍".format(i))
                 result.append(self.pop())
 
         return result
@@ -666,6 +798,9 @@ def cfgExtractor(content:str):
     print("-----------生成tiele后cb.show--------------")
     cbList.show()
 
+    print("-----------clear tiele后cb.show--------------")
+    cbList.clearTitleString()
+    cbList.show()
     # labelList = LabelLinklist()#创建空表
     # print(cbList.nodelist[0].layer)
 
@@ -713,8 +848,8 @@ def cfgExtractor(content:str):
     #--------------生成label的主循环-------------------------
         #进行label生成，进栈前检测是否出栈or进栈
         while not ls.isEmpty():
-            print("while 执行了第%d遍" % i)
-            time.sleep(1)
+            print("-----------while 执行了第%d遍------------" % i)
+            #time.sleep(1)
             if i < max:
                 #进栈队列未进栈完成
                 nodeListIsempty = False
@@ -725,7 +860,7 @@ def cfgExtractor(content:str):
 
 
 
-                #todo 进栈前检测
+                #todo 进栈前检测并popall
                 poplist = ls.checkBefore(tempnode)
                 print("进栈前poplist is {}".format(poplist))
                 ls.popall(poplist)
@@ -733,18 +868,22 @@ def cfgExtractor(content:str):
 
                 ls.push(tempnode)
 
-
+                # todo 进栈后检测并popall
                 poplist = ls.check(nodeListIsempty)
+                print("进栈后poplist is {}".format(poplist))
                 ls.popall(poplist)
 
-                print("poplist is {}".format(poplist))
+
             else:
                 #进栈队列进栈完成
+                #一般来说，此处labelStack中只剩第一个元素
                 nodeListIsempty = True
                 poplist = ls.check(nodeListIsempty)
+                print("poplist is {}".format(poplist))
+
                 ls.popall(poplist)
 
-                print("poplist is {}".format(poplist))
+
             i+=1
             if i > 5:
                 break
@@ -752,6 +891,10 @@ def cfgExtractor(content:str):
 
         # -----------生成label后cb.show--------------
         print("-----------生成label后cb.show--------------")
+        cbList.show()
+
+        print("-----------label transform后cb.show--------------")
+        cbList.labelTransform()
         cbList.show()
 
 
