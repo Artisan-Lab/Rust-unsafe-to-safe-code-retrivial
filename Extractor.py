@@ -53,6 +53,13 @@ class Node (object):
         print("--Range:\t\t{}".format(self.Range))
         print("--data:\t\t{}".format(self.data))
         print("--label:\t\t{}".format(self.label))
+
+    def showPartly(self):
+        print("--index:\t\t{}".format(self.index))
+        print("--layer:\t\t{}".format(self.layer))
+        print("--title:\t\t{}".format(self.title))
+        print("--kind:\t\t{}".format(self.kind))
+        print("--label:\t\t{}".format(self.label))
 #用于管理一份代码的所有codeBlock（即node）
 class codeBlockList(object):
     def __init__(self):
@@ -121,10 +128,21 @@ class codeBlockList(object):
         #---------------todo 以后可能在这里创建关键字列表（字典）------------------
         temp = self.nodelist[index].title
         layer = self.nodelist[index].layer#kind = (layer,string)
+        #else if 关键字比较特殊，优先查找else if，如果找到了，则return
+        dic0 = ["else if"]
+        for string in dic0:
+            pos = -1
+            pos = temp.find(string)
+            if pos >= 0:
+                self.nodelist[index].kind = (layer, string)
+                return
+            else:
+                continue
+
 
         #todo 未考虑判读语句中带有字符串的情形，如if str == "if else else if"
-        dic = ["if","else","else if","fn"]
-        for string in dic:
+        dic1 = ["if","else","fn"]
+        for string in dic1:
             pos = -1
             pos = temp.find(string)
             if pos>=0:
@@ -249,6 +267,13 @@ class codeBlockList(object):
             print("-----------codeBlock%d---------------" % j)
             self.nodelist[j].show()
             print("------------------------------------")
+
+    def showPartly(self):
+        for j in range(len(self.nodelist)):
+            print("-----------codeBlock%d---------------" % j)
+            self.nodelist[j].showPartly()
+            print("------------------------------------")
+
     #各代码块顺序按在文件中的顺序排列,并改变index
     def sortByBraceOrder(self):
         self.nodelist.sort(key=self.takeNodeBrace)
@@ -431,11 +456,14 @@ class LabeStack(object):
                 index = self.top - 1
                 start = -1
                 while index > -1:
+                    print("in check while 1 , index is %d"% index)
+                    #time.sleep(1)
                     preNode = self.getItem(index)
                     if topLayer == preNode.layer :
                         start = index
                         break
                     else:
+                        index -=1
                         continue
                 if start > -1:
                     poplist.append(self.top - start)
@@ -453,12 +481,16 @@ class LabeStack(object):
                     start = -1#start标记if位置
                     # else 的情况往前找到同层 if ，poplist放入要pop节点的数量，从后往前pop
                     while index>-1 :
+                        print("in check while 2 , index is %d" % index)
+                        #time.sleep(2)
                         preNode = self.getItem(index)
                         if topLayer == preNode.layer and preNode.getKindCondition() == "if":
                             start = index
                             break
                         else:
+                            index -=1
                             continue
+
                     if start > -1:
                         #-----check得到poplist应该包含if处位置-------
                         poplist.append(self.top - start+1)
@@ -476,7 +508,9 @@ class LabeStack(object):
                 #只剩最后一个元素
                 poplist.append(1)
             else:
-                print("ERROR12: 进栈完毕后，栈内不止一个元素")
+                num = self.top+1
+                poplist.append(num)
+                print("进栈完毕后，栈内不止一个元素")
 
         return poplist
 
@@ -489,8 +523,8 @@ class LabeStack(object):
         print("---in checkBefore-----")
         print("layerDelta is {}".format(self.layerDeltaCheckTop(tempnode)))
 
-        if self.layerDeltaCheckTop(tempnode) == 1:
-            # 1.进入下层嵌套中，pass,直接进栈，不pop，即poplist为空
+        if self.layerDeltaCheckTop(tempnode) == 1 or self.layerDeltaCheckTop(tempnode) == 0:
+            # 1.进入下层嵌套中，pass,直接进栈，不pop，即poplist为空;或者同层并列，进栈
             poplist = []
         elif self.layerDeltaCheckTop(tempnode) <= -1:
             # 2.检测往上一层或上n层，直接出栈元素至层数与tempnode层数相等即可
@@ -503,6 +537,7 @@ class LabeStack(object):
                     start = index
                     break
                 else:
+                    index -=1
                     continue
             if start > -1:
                 #此处检测到返回上层，值pop当前层的元素，不包含上层元素
@@ -848,7 +883,7 @@ def cfgExtractor(content:str):
     #--------------生成label的主循环-------------------------
         #进行label生成，进栈前检测是否出栈or进栈
         while not ls.isEmpty():
-            print("-----------while 执行了第%d遍------------" % i)
+            print("\n-----------while 执行了第%d遍------------" % i)
             #time.sleep(1)
             if i < max:
                 #进栈队列未进栈完成
@@ -858,13 +893,10 @@ def cfgExtractor(content:str):
                 #print("tempnode is \n")
                 #tempnode.show()
 
-
-
                 #todo 进栈前检测并popall
                 poplist = ls.checkBefore(tempnode)
                 print("进栈前poplist is {}".format(poplist))
                 ls.popall(poplist)
-
 
                 ls.push(tempnode)
 
@@ -876,7 +908,7 @@ def cfgExtractor(content:str):
 
             else:
                 #进栈队列进栈完成
-                #一般来说，此处labelStack中只剩第一个元素
+                #一般来说，此处labelStack中只剩第一个元素,或是只剩if
                 nodeListIsempty = True
                 poplist = ls.check(nodeListIsempty)
                 print("poplist is {}".format(poplist))
@@ -885,7 +917,7 @@ def cfgExtractor(content:str):
 
 
             i+=1
-            if i > 5:
+            if i > 10:
                 break
 
 
@@ -897,6 +929,9 @@ def cfgExtractor(content:str):
         cbList.labelTransform()
         cbList.show()
 
+        print("\n-----------cb.showPartly--------------")
+        cbList.showPartly()
+
 
 
 
@@ -907,7 +942,7 @@ def cfgExtractor(content:str):
     return
 
 def main():
-    filename:str = r"dataset/if_else/1.txt";
+    filename:str = r"dataset/if_else/4.txt";
     #print(filename)
     content = readFileToStr(filename)
 
