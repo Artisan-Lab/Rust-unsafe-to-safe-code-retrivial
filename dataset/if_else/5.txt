@@ -11,4 +11,7 @@ fn main() {
         println!("condition was false");
     }
 
+    if number == 100{
+        println!("another ");
+    }
 }

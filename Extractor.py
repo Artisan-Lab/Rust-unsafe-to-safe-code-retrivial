@@ -16,7 +16,7 @@ class Node (object):
         self.layer =layer#相对于程序入口，该代码块的嵌套层数
         self.findScope = None  # 代码块中寻找标签的源代码中的范围
         self.kind = (self.layer,self.title) #kind标记了这个node的属性，是一个元组(层数，类型）如(0,fn)(1,if)(1,else)
-        self.next = []
+        self.next = []#记录下个满足condition的跳转节点，是个元组数组，元素为(index,condition)即（跳转节点的index,满足的条件）
         self.pre = []#Node中节点上下连接Node的index存放在next和pre数组中
 
     def getKindCondition(self):
@@ -69,6 +69,43 @@ class codeBlockList(object):
     def append(self,node):
         self.nodelist.append(node)
         self.getLength()
+
+    def appendNextGoto(self,index,condition,nextNodeIndex):
+        """给index的node添加新跳转节点"""
+        if index<0 or index>= self.length or nextNodeIndex<0 or nextNodeIndex>= self.length:
+            print("ERROR:index or nextNodeIndex out of range")
+            return
+        self.nodelist[index].next.append((nextNodeIndex,condition))
+        return
+
+    def findNext(self,index,gotoIfIndex):
+        """递归寻找每个node的nextGoto"""
+        #当出现if分支时，gotoifindex记录尚未合并的if节点位置
+        tempNode = self.nodelist[index]
+        nextNode = self.nodelist[index+1]
+        if index >= self.getLength():
+            return
+        dic = ["if","else if","else"]#跳转节点的关键字
+        if nextNode[1] not in dic:
+            #如果当前节点不为跳转节点，即顺序节点,顺序节点的condition恒为true
+            #gotoIndex = index+1
+            condition = True
+            self.appendNextGoto(index,condition,index+1)
+            self.findNext(index,gotoIfIndex)
+        elif nextNode.kind[1] == "if":
+            gotoIfIndex = index
+            condition = nextNode.title
+            self.appendNextGoto(index, condition, index + 1)
+            self.findNext(index, gotoIfIndex)
+
+
+        elif nextNode.kind[1] == "else":
+
+
+
+
+
+        return
 
     def getLength(self):
         self.length = len(self.nodelist)
@@ -943,7 +980,7 @@ def cfgExtractor(content:str):
     return
 
 def main():
-    filename:str = r"dataset/if_else/4.txt";
+    filename:str = r"dataset/if_else/3.txt";
     #print(filename)
     content = readFileToStr(filename)
 

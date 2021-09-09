@@ -514,7 +514,7 @@ class LabeStack(object):
 
     def checkBefore(self,tempnode)->list:
         #执行进栈前检测，返回poplist
-        #进栈前检测，主要检测情况2.检测往上一层<=>self.layerDeltaCheck() < -1
+        #进栈前检测，主要检测情况2.检测往上一层<=>self.layerDeltaCheck() <= -1
         #todo
         poplist = []
 
@@ -572,7 +572,6 @@ class LabeStack(object):
 
         return poplist
 
-
     def layerDeltaCheck(self):
         """check top node & pre node"""
         if self.top>0:
@@ -590,7 +589,6 @@ class LabeStack(object):
         else:
             print("ERROR: the stack is empty")
             return False
-
 
     def popall(self,poplist):
         #根据poplist进行出栈
