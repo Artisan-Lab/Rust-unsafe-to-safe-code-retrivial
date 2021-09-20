@@ -78,34 +78,36 @@ class codeBlockList(object):
         self.nodelist[index].next.append((nextNodeIndex,condition))
         return
 
-    def findNext(self,index,gotoIfIndex):
-        """递归寻找每个node的nextGoto"""
-        #当出现if分支时，gotoifindex记录尚未合并的if节点位置
-        tempNode = self.nodelist[index]
-        nextNode = self.nodelist[index+1]
-        if index >= self.getLength():
-            return
-        dic = ["if","else if","else"]#跳转节点的关键字
-        if nextNode[1] not in dic:
-            #如果当前节点不为跳转节点，即顺序节点,顺序节点的condition恒为true
-            #gotoIndex = index+1
-            condition = True
-            self.appendNextGoto(index,condition,index+1)
-            self.findNext(index,gotoIfIndex)
-        elif nextNode.kind[1] == "if":
-            gotoIfIndex = index
-            condition = nextNode.title
-            self.appendNextGoto(index, condition, index + 1)
-            self.findNext(index, gotoIfIndex)
+#生成node时应该将所有代码部分分块，然后考虑结构，主要有两个方面嵌套和顺序，记录每一个块的后继节点即可
 
-
-        elif nextNode.kind[1] == "else":
-
-
-
-
-
-        return
+    # def findNext(self,index,gotoIfIndex):
+    #     """递归寻找每个node的nextGoto"""
+    #     #当出现if分支时，gotoifindex记录尚未合并的if节点位置
+    #     tempNode = self.nodelist[index]
+    #     nextNode = self.nodelist[index+1]
+    #     if index >= self.getLength():
+    #         return
+    #     dic = ["if","else if","else"]#跳转节点的关键字
+    #     if nextNode[1] not in dic:
+    #         #如果当前节点不为跳转节点，即顺序节点,顺序节点的condition恒为true
+    #         #gotoIndex = index+1
+    #         condition = True
+    #         self.appendNextGoto(index,condition,index+1)
+    #         self.findNext(index,gotoIfIndex)
+    #     elif nextNode.kind[1] == "if":
+    #         gotoIfIndex = index
+    #         condition = nextNode.title
+    #         self.appendNextGoto(index, condition, index + 1)
+    #         self.findNext(index, gotoIfIndex)
+    #
+    #
+    #     elif nextNode.kind[1] == "else":
+    #
+    #
+    #
+    #
+    #
+    #     return
 
     def getLength(self):
         self.length = len(self.nodelist)
@@ -321,6 +323,120 @@ class codeBlockList(object):
 
     def takeNodeBrace(self,elem):
         return elem.Range[0]
+
+    def takeMaxLayer(self):
+        max = -1;
+        for i in range(self.getLength()):
+            if self.nodelist[i].layer>max:
+                max = self.nodelist[i].layer
+        return max
+
+    def initElseNoneAndEnd(self):
+        #todo 整理时可以为所有else锁定其对应if
+        #为每一份代码单if创建else none，然后创建end终止节点
+        #创建的else none的range可以为紧邻的if节点range[1]+0.5；end节点可以为最后一个节点range[1]加0.5
+        maxLayer = self.takeMaxLayer()
+        for i in range(1,maxLayer+1):
+            stack = []; stop = -1;
+            for j in range(self.getLength()):
+                if self.nodelist[j].layer == i:
+                    #每一层进行if-else匹配
+                    c = self.nodelist[j].kind[1]
+                    temp = self.nodelist[j]
+                    if stop < 0 and c == "if":
+                        #初始化，遇到第一个if
+                        if len(stack) - 1 > stop and stack[stop + 1] == None:
+                            stack[stop + 1] = temp
+                        else:
+                            stack.append(temp);
+                        stop +=1
+                        print(f"i = {i}, j = {j}初始化时stop is {stop}");
+                        for k in range(len(stack)):
+                            print(f"stack[{k}] is {stack[k]}")
+                    else:
+                        if c == "if":
+                            #同层if进栈
+                            if len(stack) - 1 > stop and stack[stop + 1] == None:
+                                stack[stop + 1] = temp
+                            else:
+                                stack.append(temp);
+                            stop+=1
+                            print(f"同层if进栈stop is {stop}");
+                            for k in range(len(stack)):
+                                print(f"stack[{k}] is {stack[k]}")
+                        elif c == "else if":
+                            # 同层else if进栈
+                            if len(stack) - 1 > stop and stack[stop + 1] == None:
+                                stack[stop + 1] = temp
+                            else:
+                                stack.append(temp);
+                            stop+=1
+                            print(f"同层else if进栈stop is {stop}");
+                            for k in range(len(stack)):
+                                print(f"stack[{k}] is {stack[k]}")
+
+                        elif c == "else":
+                            #遇到同层else，即有if-else对，出栈,并且所有中间的else if也出栈
+                            #index = stop
+                            while stack[stop].kind[1] != "if":
+                                stack[stop] = None;
+                                stop -= 1;
+                            if stack[stop].kind[1] == "if":
+                                stack[stop] = None;
+                                stop -= 1;
+                            else:
+                                print("ERROR:else has no if")
+
+                else:
+                    continue
+
+            print(f"结束时stop is {stop}");
+            for k in range(len(stack)):
+                print(f"stack[{k}] is {stack[k]}")
+
+
+            #所有单if被放入stack中了，为其添加空else
+            count = 0
+            while stop>-1 and count < 10:#将栈清空
+                #todo
+                count += 1
+                tempnode = stack[stop]
+                tempnode.show()
+                if tempnode.kind != None and tempnode.kind[1] == "if":
+                    r = (tempnode.Range[1]+0.5,tempnode.Range[1]+0.5)
+
+                    #range1 = (r,r)
+                    node = Node(None,r,i,None)
+                    node.kind = (i,"else")
+                    node.title = "else"
+                    self.append(node)
+                    stop -=1
+                elif tempnode.kind[1] == "else if":
+                    r = tempnode.Range[1]
+                    r = r+0.5
+                    # range1 = (r,r)
+                    node = Node(None, (r, r), i, None)
+                    node.kind = (i, "else")
+                    node.title = "else"
+                    self.append(node)
+                    while stack[stop].kind[1] == "else if" :
+                        stop -=1
+                        #跳过所有相邻的“else if” 直到其他的if
+                    if stack[stop].kind[1] == "if":
+                        stop -= 1 #将匹配的if出栈
+                    else:
+                        print("ERROR:there is not if before else if")
+
+
+        last = self.nodelist[0].Range[1]
+        last = last + 0.5
+        node = Node(None, (last, last), 0, None)
+        node.kind = (0, "end")
+        node.title = "end"
+        self.append(node)
+        #添加终止节点
+
+        return
 
 #用于生成node的label的数据结构
 class LabelNode(object):
@@ -646,6 +762,10 @@ class LabeStack(object):
 
         return result
 
+class LevelTraversal(object):
+    #todo 通过层次遍历生成cfg
+    def __init__(self):
+        return
 
 
 
@@ -730,7 +850,6 @@ def codeBlockExtractor(content:str):
     # array = [];atop = -1;
     #stack栈用于记录括号匹配信息，在左括号进栈之后,栈的深度stop的值等于左括号所处的层数layer
     stack = [];stop = -1;
-
     #利用brace括号匹配生成代码块，形成初步的node list
     #layer = 0,1,2,3....
     for i in range(len(content)):
@@ -766,7 +885,6 @@ def codeBlockExtractor(content:str):
                 # print("stop is {}\n".format(stop))
                 # print("len stack is {}\n".format(len(stack)))
                 # print("stack is {}\n".format(stack[stop]))
-
             elif c == "}":
                  # 若当前为右括号，出栈。并检测到一个code black,放入cb中
                  layer = stop - 1;
@@ -855,6 +973,7 @@ def codeBlockExtractor(content:str):
 def cfgExtractor(content:str):
     print("-----------cfgExtractor---------------")
     cbList = codeBlockExtractor(content)#cbList存放了所有的codeBlock节点node
+    #cblist是codeBlockList实例化的对象
     # p_if = find(content,"if")
     # p_else = find(content,"else")
     # print(p_if)
@@ -866,13 +985,22 @@ def cfgExtractor(content:str):
     #     cbList[j].show()
     #     print("---------------------------")
 
+
     cbList.calFindScope(content)#确定每个node的title，以便于生成label
+
+
     #-----------生成title后cb.show--------------
     print("-----------生成tiele后cb.show--------------")
     cbList.show()
 
     print("-----------clear tiele后cb.show--------------")
     cbList.clearTitleString()
+
+    # 第一次sortByBraceOrder()以及calFindScope()生成label后，为单if创建空else，以及每份代码创建一个end
+    cbList.initElseNoneAndEnd()
+    cbList.sortByBraceOrder()
+
+
     cbList.show()
     # labelList = LabelLinklist()#创建空表
     # print(cbList.nodelist[0].layer)
@@ -970,6 +1098,9 @@ def cfgExtractor(content:str):
         print("\n-----------cb.showPartly--------------")
         cbList.showPartly()
 
+        #----通过layer层次遍历生成cfg
+
+
 
 
 
@@ -977,17 +1108,286 @@ def cfgExtractor(content:str):
 
     print("-----------End of cfgExtractor-------------")
 
+    return cbList
+
+
+def weightedBipartiteGraphMatching(cb1,cb2):
+    #得到两份代码cb1和cb2直接的相似度，cb=codeBlocklist
+    l1 = cb1.getLength()
+    l2 = cb2.getLength()
+    #m是计算相似性的矩阵
+    m = [[0 for i in range(l2)] for j in range(l1)]
+    #m：初始矩阵
+
+    #创建l1行l2列的全0矩阵
+    #即第一份代码cb1的block作为行号，cb2的block作为列索引
+
+    print(f"m is \n{m}")
+    #Kuhn-Munkres Algorithm (Matrix View)
+
+    #Step 1: Initiate adjacent matrix
+    for i in range(l1):
+        for j in range(l2):
+            a = cb1.nodelist[i].title
+            b = cb2.nodelist[j].title
+            m[i][j] = EditDistance(a,b)
+            pass
+        pass
+    print(f"after step 1 m is \n{m}")
+    #Step 2: Subtract the smallest value in each row from the other values in the row
+    minlist = []
+    for i in range(l1):
+        minlist.append(m[i][0])
+        for j in range(l2):
+            if minlist[i] > m[i][j]:
+                minlist[i] = m[i][j]
+            pass
+        pass
+
+    # m1是计算相似性的矩阵,后面m1的值会改变，所以此时复制一份m
+    # m1：行列减min后的矩阵
+    m1 = [[m[j][i] for i in range(l2)] for j in range(l1)]
+    # print("-----------------------------------------")
+    # print(f"m is \n{m}")
+    # print(f"m1 is \n{m1}")
+
+    for i in range(l1):
+        for j in range(l2):
+            m1[i][j] -=minlist[i]
+        pass
+    print(f"after step 2 m1 is \n{m1}")
+
+    #Step 3: subtract the smallest value in each column from all other values in the column
+    minlist = []
+    for j in range(l2):
+        minlist.append(m1[0][j])
+        for i in range(l1):
+            if minlist[j] > m1[i][j]:
+                minlist[j] = m1[i][j]
+
+
+    for j in range(l2):
+        for i in range(l1):
+            m1[i][j] -=minlist[j]
+        pass
+    print(f"after step 3 m1 is \n{m1}")
+
+    #Step 4: Draw lines through the row and columns that have the 0 entries such that the fewest lines possible are drawn.
+    drawRow = []
+    drawCol = []
+    #这一步可能导致m1改变，所以备份一份
+    #m2：draw line后的矩阵。被draw line的行和列全部+1
+    m2 = [[m1[j][i] for i in range(l2)] for j in range(l1)]
+    # print("-----------------------------------------")
+    # print(f"m1 is \n{m1}")
+    # print(f"m2 is \n{m2}")
+    #count = 0
+    while isContainZero(m2,l1,l2) :
+        # print(f"-------isContainZero is {isContainZero(m2,l1,l2)}")
+        m2,drawRow,drawCol = getZeroNumMaxline(m2,drawRow,drawCol,l1,l2)
+
+        #print(f"in while {count}, m2 is \n{m2}")
+        print(f"drawRow is {drawRow}, drawCol is {drawCol}")
+        #count += 1
+
+    print(f"-------isContainZero is {isContainZero(m2, l1, l2)}")
+
+    #print(f"end while {count}, m2 is \n{m2}")
+    print(f"drawRow is {drawRow}, drawCol is {drawCol}")
+
+    print("------------step5-----------------")
+    #Step 5: If there are n lines drawn, an optimal assignment of zeros is possible and the algorithm is finished.
+    #If the number of lines is less than n, then the optimal number of zeroes is not yet reached. Go to the next step.
+    if len(drawCol)+len(drawRow) == min(l1,l2):
+        print("m is ");showMatrix(m,l1,l2)
+        print("m1 is ");showMatrix(m1,l1,l2)
+        print("m2 is ");showMatrix(m2,l1,l2)
+
+
+
+        return m,m1,m2,drawRow,drawCol
+    elif len(drawCol)+len(drawRow) > min(l1,l2):
+        print("ERROE:len(drawCol)+len(drawRow) > max(l1,l2)")
+
+    count = 0
+    print("------------step6-----------------")
+    while len(drawCol)+len(drawRow) < min(l1,l2) and count<5:
+    #Step 6: Find the smallest entry not covered by any line. Subtract this entry from each row that isn’t crossed out,
+    #and then add it to each column that is crossed out. Then, go back to Step 4.
+        other_min = 1;
+        for i in range(l1):
+            if i in drawRow:
+                continue
+            for j in range(l2):
+                if j in drawCol:
+                    continue
+                else:
+                    if m1[i][j]<other_min:
+                        other_min = m1[i][j]
+
+        print(f"other min is {other_min}")
+
+
+        for i in range(l1):
+            if i in drawRow:
+                continue
+            for j in range(l2):
+                if j in drawCol:
+                    continue
+                else:
+                    m1[i][j] -= other_min
+                    m2[i][j]-=other_min
+
+        while isContainZero(m2, l1, l2):
+            # print(f"-------isContainZero is {isContainZero(m2,l1,l2)}")
+            m2, drawRow, drawCol = getZeroNumMaxline(m2, drawRow, drawCol, l1, l2)
+
+            # print(f"in while {count}, m2 is \n{m2}")
+            print(f"drawRow is {drawRow}, drawCol is {drawCol}")
+        print(f"drawline is {len(drawCol)+len(drawRow)}, maxEdge is {max(l1,l2)}")
+        count +=1
+
+    print("------------step7-----------------")
+
+    print("m is ");
+    showMatrix(m, l1, l2)
+    print("m1 is ");
+    showMatrix(m1, l1, l2)
+    print("m2 is ");
+    showMatrix(m2, l1, l2)
+
+
+
+    return m,m1,m2,drawRow,drawCol
+
+def showMatrix(m,l1,l2):
+    print("--------show matrix-----------")
+    for i in range(l1):
+        print("[",end='')
+        for j in range(l2):
+            if j == 0:
+                print("{:.2f}".format(m[i][j]), end='')
+            else:
+                print("\t{:.2f}".format(m[i][j]),end='')
+        print("]")
+    print("--------end matrix-----------")
     return
 
+def getZeroNumMaxline(m2,dr,dc,l1,l2):
+    row = -1
+    rmax = -1
+    rnum = []
+    for i in range(l1):
+        count = 0
+        for j in range(l2):
+            if m2[i][j] == 0:
+                count+=1
+        rnum.append(count)
+
+    for i in range(l1):
+        if rnum[i] > rmax:
+            rmax = rnum[i]
+            row = i
+    print(f"getZeroNumMaxline--row m is {m2}")
+    print(f"row is {row}, rmax is {rmax}")
+
+    col = -1
+    cmax = -1
+    cnum = []
+    for j in range(l2):
+        count = 0
+        for i in range(l1):
+            if m2[i][j] == 0:
+                count += 1
+        cnum.append(count)
+
+    for j in range(l2):
+        if cnum[j] > cmax:
+            cmax = cnum[j]
+            col = j
+    print(f"getZeroNumMaxline--col m is {m2}")
+    print(f"col is {col}, cmax is {cmax}")
+
+    # 找到这一行或者列0的数量最多，则这一行加1
+    if rmax > cmax:
+        #说明最多的line是行
+        dr.append(row)
+        for j in range(l2):
+            m2[row][j] += 1
+        print(f"getZeroNumMaxline--max row m is {m2}")
+        print(f"row is {row}, rmax is {rmax}")
+    else:
+        dc.append(col)
+        for i in range(l1):
+            m2[i][col] += 1
+        print(f"getZeroNumMaxline--max col m is {m2}")
+        print(f"col is {col}, cmax is {cmax}")
+
+    return m2, dr, dc
+
+def isContainZero(m2,l1,l2):
+    print(f"--in isContainZero, m2 is \n{m2}")
+    print(f"--in isContainZero, l1 is {l1},l2 is {l2}")
+    flag = False
+    for i in range(l1):
+        for j in range(l2):
+            print(f"m[{i}][{j}] is {m2[i][j]}")
+            if m2[i][j] == 0:
+                flag = True
+            if m2[i][j] == 0.0:
+                flag = True
+
+    return flag
+
+def LCS(a, b, i, j):
+    #初始的i=len(a), j=len(b),计算最大公共子串的字符数
+    if i == 0 or j == 0:
+        return 0
+    if a[i] == b[j]:
+        return LCS(a, b, i - 1, j - 1) + 1
+    else:
+        return max(LCS(a, b, i - 1, j), LCS(a, b, i, j - 1))
+
+def getLineNumMaxZero():
+
+    return
+def isContainLine():
+
+    return
+
+# def test1(cd:codeBlockList):
+#     cd.nodelist[]
+#函数传参时添加声明可以快捷访问该变量里面的属性和方法
+
+def EditDistance(a,b):
+    #a,b均为字符串，计算其编辑距离
+    i = len(a)-1
+    j = len(b)-1
+    distance = 1-2*LCS(a,b,i,j)/(i+j+2)
+    # print(f"\tLCS is {LCS(a,b,i,j)}\n\ti is {i},j is {j}\n\ta is {a}\n\tb is {b}")
+    return distance
+
 def main():
-    filename:str = r"dataset/if_else/3.txt";
+    filename:str = r"dataset/if_else/1.txt";
     #print(filename)
     content = readFileToStr(filename)
 
-    cfgExtractor(content)
+    cb1 = cfgExtractor(content)
     #codeBlockExtractor(content)
     # print(find(content,"{"))
     # print(find(content,"}"))
+
+    if True:
+        filename2: str = r"dataset/if_else/2.txt";
+        # print(filename)
+        content2 = readFileToStr(filename2)
+        cb2 = cfgExtractor(content2)
+        m,m1,m2,drawRow,drawCol=weightedBipartiteGraphMatching(cb1,cb2)
+        print(f"m is \n{m}")
+        print(f"m1 is \n{m1}")
+        print(f"m2 is \n{m2}")
+        print(f"drawRow is {drawRow}, drawCol is {drawCol}")
+
     return
 
 
